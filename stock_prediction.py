@@ -1,6 +1,7 @@
 # File: stock_prediction.py
 # Authors: Cheong Koo and Bao Vo
 # Date: 14/07/2021(v1); 19/07/2021 (v2); 25/07/2023 (v3)
+from collections import deque
 
 # Code modified from:
 # Title: Predicting Stock Prices with Python
@@ -23,6 +24,7 @@ import pandas_datareader as web
 import datetime as dt
 import tensorflow as tf
 import yfinance as yf
+from sklearn.model_selection import train_test_split
 
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.models import Sequential
@@ -275,3 +277,125 @@ print(f"Prediction: {prediction}")
 # the stock price:
 # https://github.com/jason887/Using-Deep-Learning-Neural-Networks-and-Candlestick-Chart-Representation-to-Predict-Stock-Market
 # Can you combine these different techniques for a better prediction??
+
+def processData(ticker, startDate=None, endDate=None, testToTrainRatio=0.2, storeDataLocally=False, splitByDate=True, scale=False):
+    if isinstance(ticker, str):
+        # load data from yahoo finance library
+        data = yf.download(ticker, startDate, endDate, progress=False)
+    elif isinstance(ticker, pd.DataFrame):
+        # if data already loaded
+        data = ticker
+    else:
+        raise TypeError("ticker is not a String or DataFrame")
+
+    result = {}
+
+    if storeDataLocally and not isinstance(ticker, pd.DataFrame):
+        if startDate is not None and endDate is not None:
+            data.to_csv(ticker+':'+startDate+"to"+endDate+".csv")
+            result["dataFileName"] = ticker + ':' + startDate + "to" + endDate + ".csv"
+        else:
+            data.to_csv(ticker+".csv")
+            result["dataFileName"] = ticker + ".csv"
+
+    # lookback_days is the number of days to look in the past to predict the next day
+    # lookup_days is the number of days to predict with n lookback days
+    # feature_columns are the columns that are included when downloading data from yfinance
+    lookback_days = 50
+    lookup_days = 1
+    feature_columns = ['adjclose', 'volume', 'open', 'high', 'low']
+
+    if scale:
+        column_scaler = {}
+        # scale the data from 0 to 1
+        for column in feature_columns:
+            scaler = MinMaxScaler(feature_range=(0, 1))
+            data[column] = scaler.fit_transform(np.expand_dims(data[column].values, axis=1))
+            column_scaler[column] = scaler
+        result["scalers"] = column_scaler
+        # storing scaled columns in returned dict
+
+    # remove NaNs
+    # inplace true to modify the data directly
+    data.dropna(inplace=True)
+
+    sequence_data = []
+    sequences = deque(maxlen=lookback_days)
+    # double ended queue with lookback days as max length
+
+    for entry, target in zip(data[feature_columns].values, data['future'].values):
+        sequences.append(entry)
+        if len(sequences) == lookback_days:
+            sequence_data.append([np.array(sequences), target])
+    # sequence_data is now filled with the data from the past 50 days and the 51st day price
+
+    x_train = []
+    y_train = []
+    x_test = []
+    y_test = []
+
+    # transferring the training data into x_train and y_train
+    for seq, target in scaled_data:
+        x_train.append(seq)
+        y_train.append(target)
+
+    # Convert into an array
+    x_train, y_train = np.array(x_train), np.array(y_train)
+
+    # split the dataset into training & testing sets by date or randomly depending on arguments
+    # also taking into account the testToTrainRatio
+    if splitByDate:
+        train_samples = int((1 - testToTrainRatio) * len(x_train))
+        x_train = x_train[:train_samples]
+        y_train = y_train[:train_samples]
+        x_test = x_train[train_samples:]
+        y_test = y_train[train_samples:]
+    else:
+        x_train, x_test, y_train, y_test = train_test_split(data, test_size=(1-testToTrainRatio))
+
+    x_train = x_train[:, :, :len(feature_columns)].astype(np.float32)
+    x_test = x_test[:, :, :len(feature_columns)].astype(np.float32)
+    #reformat x_train and x_test into floating point numbers
+
+    x_train = np.reshape(x_train, (x_train.shape[0], x_train.shape[1], 1))
+
+    # ------------------------------------------------------------------------------
+    # Building and training the model
+    # ------------------------------------------------------------------------------
+
+    model = Sequential()
+
+    # Adding layers to the model
+    model.add(LSTM(units=50, return_sequences=True, batch_input_shape=(None, lookback_days, len(feature_columns))))
+    model.add(Dropout(0.2))
+    model.add(LSTM(units=50, return_sequences=True))
+    model.add(Dropout(0.2))
+    model.add(LSTM(units=50))
+    model.add(Dropout(0.2))
+
+    model.add(Dense(units=1))
+
+    model.compile(optimizer='adam', loss='mean_squared_error')
+
+    model.fit(x_train, y_train, epochs=25, batch_size=32)
+
+    # ------------------------------------------------------------------------------
+    # Testing
+    # ------------------------------------------------------------------------------
+
+    # predict prices
+    predicted_prices = model.predict(x_test)
+
+    if scale:
+        y_test = np.squeeze(result["column_scaler"]["adjclose"].inverse_transform(np.expand_dims(y_test, axis=0)))
+        predicted_prices = np.squeeze(data["column_scaler"]["adjclose"].inverse_transform(predicted_prices))
+    # Reverse the scaling
+
+    result["predicted_prices"] = predicted_prices.copy()
+    result["actual_prices"] = y_test.copy()
+
+    return result
+
+
+
+
