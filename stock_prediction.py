@@ -302,8 +302,10 @@ def processData(ticker, startDate=None, endDate=None, testToTrainRatio=0.2, stor
     # lookup_days is the number of days to predict with n lookback days
     # feature_columns are the columns that are included when downloading data from yfinance
     lookback_days = 50
-    lookup_days = 1
     feature_columns = ['adjclose', 'volume', 'open', 'high', 'low']
+
+    # add "future" column in the data to represent the next days' closing price
+    scaled_data['future'] = scaled_data['adjclose'].shift(-lookback_days)
 
     if scale:
         column_scaler = {}
@@ -356,8 +358,6 @@ def processData(ticker, startDate=None, endDate=None, testToTrainRatio=0.2, stor
     x_train = x_train[:, :, :len(feature_columns)].astype(np.float32)
     x_test = x_test[:, :, :len(feature_columns)].astype(np.float32)
     #reformat x_train and x_test into floating point numbers
-
-    x_train = np.reshape(x_train, (x_train.shape[0], x_train.shape[1], 1))
 
     # ------------------------------------------------------------------------------
     # Building and training the model
