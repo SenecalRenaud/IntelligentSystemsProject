@@ -30,6 +30,7 @@ from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout, LSTM, InputLayer
 
+
 #------------------------------------------------------------------------------
 # Load Data
 ## TO DO:
