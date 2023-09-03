@@ -28,7 +28,7 @@ from sklearn.model_selection import train_test_split
 
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Dropout, LSTM, InputLayer
+from tensorflow.keras.layers import Dense, Dropout, LSTM, RNN, GRU, InputLayer
 
 
 #------------------------------------------------------------------------------
@@ -398,5 +398,21 @@ def processData(ticker, startDate=None, endDate=None, testToTrainRatio=0.2, stor
     return result
 
 
+def createDLNetwork(sequence_length, numberOfFeatures, numberOfLayers=2, layerSize=50,
+                    layerName=LSTM, dropout=0.2, optimizer='adam', loss='mean_squared_error'):
 
+    model = Sequential()
+    for i in range(numberOfLayers):
+        if i == 0:
+            model.add(layerName(layerSize, return_sequences=True, batch_input_shape=(None, sequence_length, len(numberOfFeatures))))
+        elif i == numberOfLayers-1:
+            model.add(layerName(layerSize))
+        else:
+            model.add(layerName(layerSize, return_sequences=True))
 
+        model.add(Dropout(dropout))
+
+    model.add(Dense(units=1))
+    model.compile(optimizer=optimizer, loss=loss)
+
+    return model
