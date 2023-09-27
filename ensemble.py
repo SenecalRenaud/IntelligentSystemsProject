@@ -197,7 +197,7 @@ def ensembleTesting(ticker, startDate=None, endDate=None, testToTrainRatio=0.2, 
     # Random Forest
     # ------------------------------------
 
-    rf = RandomForestRegressor(n_estimators=100, random_state=42)
+    rf = RandomForestRegressor(n_estimators=100)
     rf.fit(unscaled_x_train, unscaled_y_train)
     rf_prediction = rf.predict(unscaled_x_test)
 
